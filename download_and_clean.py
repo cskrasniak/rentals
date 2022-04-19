@@ -9,10 +9,14 @@ from selenium import webdriver, webdrive_manager
 # from webdriver_manager.chrome import ChromeDriverManager
 from webdriver.common.by import By
 import time
+from tqdm import tqdm
 
+download_dir = r'/Users/ckrasnia/Downloads'
+final_dir = r'/Users/ckrasnia/Documents/application_materials/rental_data'
 # navigate to the website
 driver = webdriver.Chrome(webdrive_manager.chrome.ChromeDriverManager().install())
 driver.get(r"http://insideairbnb.com/get-the-data")
+
 
 # most of the data is hidden, so open all of those paths so it can be seen
 
@@ -44,9 +48,33 @@ for i in range(len(target_data)):
     target_data[i].click()  # downloads the data
     time.sleep(2)  # time to download
 
-basedir = '~/Desktop/airbnb_data'
-os.chdir(basedir)
-files = os.listdir(basedir)
+## Now I have the data downloaded, I'll take only the US data, concatenate it to a single df and 
+## save it
+os.chdir(download_dir)
+downloads = os.listdir()
+# make sure the directory we are moving them to exists
+if ~os.path.exists(final_dir()):
+    os.mkdir(final_dir)
+# initilize list
 data_list = []
-listings = pd.concat([pd.read_csv(file) for file in files])
-pd.read
+for dl in tqdm(downloads):
+    if (dl.startswith('listings') & dl.endswith('.csv.gz')) | \
+       (dl.startswith('listings') & dl.endswith('.csv')):
+        # I only want US listings, so I need to find where these are from. It will also be useful 
+        # to have a column about the location. The issue is that there is no column for location,
+        # so to assign one I'll find the place where a majority of the hosts live, and assume that
+        # is the location of the whole dataset
+        temp_data = pd.read_csv(dl)
+        us, cnts = np.unique(temp_data['host_location'].dropna(),return_counts=True)
+        location = us[np.argmax(cnts)]
+        temp_data['location'] = location
+        if 'United States' in location:
+            data_list.append(temp_data)
+
+# concatenate and save this data
+data = pd.concat(data_list)
+if ~os.path.exists(final_dir):
+    os.mkdir(final_dir)
+data.to_csv(os.path.join(final_dir,'raw_US_listings.csv'))
+        
+# now I have the data, and I want to clean it up a bit, first I'll drop some columns I wont need
