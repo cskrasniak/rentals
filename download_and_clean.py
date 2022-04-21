@@ -70,16 +70,19 @@ for dl in tqdm(downloads):
 
 # concatenate and save this data
 data = pd.concat(data_list)
-if ~os.path.exists(final_dir):
+if not os.path.exists(final_dir):
     os.mkdir(final_dir)
 data.to_csv(os.path.join(final_dir,'raw_US_listings.csv'))
         
+# Load data if already saved 
+data = pd.read_csv(os.path.join(final_dir,'raw_US_listings.csv'))
+
 # now I have the data, and I want to clean it up a bit, first I'll drop some columns I wont need
 # dropping some useless info, some with duplicate data, and some that have very low variance, ie >90% the same value
 data['neighbourhood_group_cleansed'][data['neighbourhood_group_cleansed'].isna()] = data['neighbourhood_cleansed'][data['neighbourhood_group_cleansed'].isna()]
 drop_columns = ['listing_url','host_url','host_thumbnail_url','host_picture_url',
                 'host_neighbourhood','host_total_listings_count', 'host_verifications', 
-                'neighbourhood_cleansed','calandar updated']
+                'neighbourhood_cleansed','calendar_updated']
 data=data.drop(drop_columns,axis=1)
 
 ## OK so the next goal is to make a regression model trying to predict the total income from a 
@@ -108,8 +111,15 @@ def get_bathrooms(list):
 data['bathrooms'] = column.str.split().apply(get_bathrooms)
 data['bathrooms'][data['bathrooms'] == 1000] = np.nan # set the nans back to nan
 
-# remove the dollar signs and commas from prices and convert to float
-data['price'] = data['price'].str[1:].str.replace(",","").astype(float)
+# there are a few nan prices which are useless as the price is key, we'll drop those
+data = data[~data['price'].isna()]
+# remove the dollar signs and commas from prices and convert to float, there are a few entries that
+# already have these stripped though, so we'll have to exclude those, this is a bit messy
+# but it works
+data['price'][~data['price'].str.isnumeric()] = data['price'].str[1:-3].str.replace(",","") \
+    [data['price'].str[1:-3].str.replace(",","").str.isnumeric()].astype(float)
+
+data['price'] = data['price'].astype(float)
 
 # there are a couple boolean columns coded as "t" and "f", replace those with 1, 0
 boolean_mapper = {'t' : 1, 'f' : 0}
@@ -119,6 +129,8 @@ bools = ['instant_bookable','has_availability', 'host_has_profile_pic',
 for column in bools:
     data[column] = data[column].map(boolean_mapper, na_action="ignore")
 
+rt_mapper = {'Entire home/apt' : 3, 'Private room' : 2, 'Hotel room' : 1, np.nan : 0}
+data['room_type'] = data['room_type'].map(rt_mapper)
 # Ok things are starting to look better, but because of the way I grabbed the data, there are many
 # duplicates and triplicates of listings in the set. So now I need to make some decisions about how
 # to solve this. For this first step of just making a simple regression model, I think I'll just 
