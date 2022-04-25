@@ -9,6 +9,9 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 from tqdm import tqdm
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import KFold
+import matplotlib.pyplot as plt
 
 download_dir = r'/Users/ckrasnia/Downloads'
 final_dir = r'/Users/ckrasnia/Documents/application_materials/rental_data'
@@ -129,8 +132,11 @@ bools = ['instant_bookable','has_availability', 'host_has_profile_pic',
 for column in bools:
     data[column] = data[column].map(boolean_mapper, na_action="ignore")
 
-rt_mapper = {'Entire home/apt' : 3, 'Private room' : 2, 'Hotel room' : 1, np.nan : 0}
+rt_mapper = {'Entire home/apt' : 3, 'Private room' : 2, 'Hotel room' : 1}
 data['room_type'] = data['room_type'].map(rt_mapper)
+# the nan room types are shared, so assign these to 0
+data['room_type'][data['room_type'].isna()] = 0
+
 # Ok things are starting to look better, but because of the way I grabbed the data, there are many
 # duplicates and triplicates of listings in the set. So now I need to make some decisions about how
 # to solve this. For this first step of just making a simple regression model, I think I'll just 
@@ -145,7 +151,8 @@ use_columns = ['host_is_superhost', 'host_listings_count', 'host_has_profile_pic
                'number_of_reviews_ltm', 'review_scores_rating', 'review_scores_accuracy',
                'review_scores_cleanliness', 'review_scores_checkin', 'review_scores_communication',
                'review_scores_location', 'review_scores_value', 'instant_bookable',
-               'calculated_host_listings_count','reviews_per_month', 'id', 'has_availability']
+               'calculated_host_listings_count','reviews_per_month', 'id', 'has_availability', 
+               'room_type']
 
 numeric_data = data[use_columns]
 numeric_data = numeric_data.groupby('id').mean()
@@ -159,13 +166,13 @@ for col in bools:
 # a listing switched between values of being instant_bookable and from having a superhost or not,
 # should remember this for the future as we could do some interesting experiments to see how these
 # changes affected the income for that listing
-# Another interesting tidbit from here is that many of these columns have the sum number (764) of 
+# Another interesting tidbit from here is that many of these columns have the same number (764) of 
 # nans, thats pretty small and if the same listings have a bunch of nans they won't be very helpful
 # anyway so we can probably drop those
 
 # look more at where there are nans
 for col in numeric_data.columns:
-    print('fraction nans in {} : {:1.3f}'.format(col,np.sum(numeric_data[col].isna())/len(numeric_data)))
+    print('fraction nans in {} : {:1.3f}%'.format(col,np.sum(numeric_data[col].isna())/len(numeric_data)*100))
 # Ok we have a few things here, some are easy to fix, others not so much. For those with no host 
 # information we can easily drop that .3% of data and be fine. The first problem is in the number 
 # of bedrooms whih is ~10% nan. I think this might be from listings that are a single private room
@@ -175,3 +182,98 @@ for col in numeric_data.columns:
 # ~25% of listings have no reviews, so dealing with that could be tricky. I definitely want to 
 # include review data as it is probably pretty influential, might just try setting NaN to a review
 # score of 0 and see how that goes.
+
+# start by giving the listings with no reviews a review of 0
+reviews = ['number_of_reviews','number_of_reviews_ltm', 'review_scores_value', 'reviews_per_month',
+           'review_scores_accuracy', 'review_scores_cleanliness', 'review_scores_checkin',
+           'review_scores_communication', 'review_scores_location']
+for review in reviews:
+    numeric_data[review][numeric_data[review].isna()] = 0     
+
+for col in numeric_data.columns:
+    print('fraction nans in {} : {:1.3f}%'.format(col,np.sum(numeric_data[col].isna())/len(numeric_data)*100))
+
+# lets see how to deal with the 10% of listings with no bedroom count
+print(numeric_data[numeric_data['bedrooms'].isna()].describe())
+
+# looks like these are really all over the place unfortunately... I think the most reasonable thing
+# to do here is to calculate the mean number of bedrooms there are per the number of beds listed. 
+# because only 3% of the data has no beds
+
+# need to take the reciprical of what I actually want to avoid the devide by zero issue for 0 beds
+bedrooms_per_beds = 1 / (numeric_data[~numeric_data['bedrooms'].isna()]['beds'] \
+    / numeric_data[~numeric_data['bedrooms'].isna()]['bedrooms']).mean()
+
+numeric_data['bedrooms'][numeric_data['bedrooms'].isna()] = \
+    numeric_data['beds'][numeric_data['bedrooms'].isna()] * bedrooms_per_beds
+
+# check nans again
+for col in numeric_data.columns:
+    print('fraction nans in {} : {:1.3f}%'.format(col,np.sum(numeric_data[col].isna())/len(numeric_data)*100))
+
+# ok now we look pretty good, our colun with the most nans is beds with ~3%, so lets just drop the
+# rest of the nans
+for col in numeric_data.columns:
+    numeric_data = numeric_data[numeric_data[col].notna()]
+
+# we still have 243k listings so that is pretty good
+print('total number of listings: {}'.format(len(numeric_data)))
+
+# now lets start looking at the data to get some future steps
+corr_mat = np.corrcoef(np.array(numeric_data).T)
+fig,ax = plt.subplots()
+ax.set_xticks(np.arange(len(numeric_data.keys())))
+ax.set_yticks(np.arange(len(numeric_data.keys())))
+# ax.set_xticklabels(numeric_data.keys())
+ax.set_yticklabels(numeric_data.keys())
+ax.imshow(corr_mat)
+
+# one glaring thing is that all the reviews are almost perfectly correlated, so I'm just going to
+# take the mean of them and group them all into 'reviews'
+reviews = ['review_scores_value', 
+           'review_scores_accuracy', 'review_scores_cleanliness', 'review_scores_checkin',
+           'review_scores_communication', 'review_scores_location']
+numeric_data['reviews'] = numeric_data[reviews].mean(axis=1)
+for review in reviews:
+    numeric_data.drop(review,axis=1, inplace=True)
+
+# lets look again at how correlated things are
+corr_mat = np.corrcoef(np.array(numeric_data).T)
+fig,ax = plt.subplots()
+ax.set_xticks(np.arange(len(numeric_data.keys())))
+ax.set_yticks(np.arange(len(numeric_data.keys())))
+# ax.set_xticklabels(numeric_data.keys())
+ax.set_yticklabels(numeric_data.keys())
+ax.imshow(corr_mat)
+
+# This looks better now, still some relatively high correlations between beds, bedrooms, bathrooms,
+# and accomodates, but the highest is .83 so still a fair bit of independent information
+
+# finally lets calculate our prediction variable which I'll call monthly income, this will 
+# definitely be an imperfect measure of monthly income, but it will essentially be the number of
+# non available days over the next 30 days times the price per day.
+
+numeric_data['monthly_income'] = numeric_data['price'] * np.abs(numeric_data['availability_30'] - 30)
+
+# first just try a simple linear regression without much more pre-processing of features
+features = ['host_is_superhost', 'host_has_profile_pic', 'host_identity_verified',
+            'accommodates', 'bathrooms', 'bedrooms', 'beds',
+            'maximum_nights',  'number_of_reviews', 'price',
+            'number_of_reviews_ltm', 'instant_bookable',
+            'calculated_host_listings_count', 'reviews_per_month',
+            'room_type', 'reviews']
+
+regression = LinearRegression()
+kfold = KFold(5, shuffle=True)
+cv_scores = []
+coefs = []
+for train_idx,test_idx in kfold.split(numeric_data[features]):
+    regression.fit(numeric_data[features].iloc[train_idx],numeric_data['monthly_income'].iloc[train_idx])
+    r2=regression.score(numeric_data[features].iloc[test_idx],numeric_data['monthly_income'].iloc[test_idx])
+    cv_scores.append(r2)
+    coefs.append(regression.coef_)
+# mean r2 of .55 with linear regression and a paired down set of regressors, pretty good starting
+# point but lets see if we can do better in other files.
+
+# first I'm going to explore a few of the wordy columns to see if theres any promising information
+# there
