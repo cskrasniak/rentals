@@ -151,11 +151,12 @@ use_columns = ['host_is_superhost', 'host_listings_count', 'host_has_profile_pic
                'number_of_reviews_ltm', 'review_scores_rating', 'review_scores_accuracy',
                'review_scores_cleanliness', 'review_scores_checkin', 'review_scores_communication',
                'review_scores_location', 'review_scores_value', 'instant_bookable',
-               'calculated_host_listings_count','reviews_per_month', 'id', 'has_availability', 
-               'room_type']
+               'calculated_host_listings_count','reviews_per_month', 'has_availability', 
+               'room_type'] # dont want , 'id' if not using groupby
 
 numeric_data = data[use_columns]
-numeric_data = numeric_data.groupby('id').mean()
+# try skipping the groupby to treat each data point independently
+# numeric_data = numeric_data.groupby('id').mean()
 
 # look to see how often things changed, this should be easy in the columns that are boolean
 for col in bools:
@@ -186,7 +187,7 @@ for col in numeric_data.columns:
 # start by giving the listings with no reviews a review of 0
 reviews = ['number_of_reviews','number_of_reviews_ltm', 'review_scores_value', 'reviews_per_month',
            'review_scores_accuracy', 'review_scores_cleanliness', 'review_scores_checkin',
-           'review_scores_communication', 'review_scores_location']
+           'review_scores_communication', 'review_scores_location', 'review_scores_rating']
 for review in reviews:
     numeric_data[review][numeric_data[review].isna()] = 0     
 
@@ -207,6 +208,9 @@ bedrooms_per_beds = 1 / (numeric_data[~numeric_data['bedrooms'].isna()]['beds'] 
 numeric_data['bedrooms'][numeric_data['bedrooms'].isna()] = \
     numeric_data['beds'][numeric_data['bedrooms'].isna()] * bedrooms_per_beds
 
+numeric_data = (numeric_data.drop(use_columns, axis=1)
+         .join(numeric_data[use_columns].apply(pd.to_numeric, errors='coerce')))
+
 # check nans again
 for col in numeric_data.columns:
     print('fraction nans in {} : {:1.3f}%'.format(col,np.sum(numeric_data[col].isna())/len(numeric_data)*100))
@@ -216,7 +220,7 @@ for col in numeric_data.columns:
 for col in numeric_data.columns:
     numeric_data = numeric_data[numeric_data[col].notna()]
 
-# we still have 243k listings so that is pretty good
+# we still have 480k listings so that is pretty good
 print('total number of listings: {}'.format(len(numeric_data)))
 
 # now lets start looking at the data to get some future steps
@@ -230,7 +234,7 @@ ax.imshow(corr_mat)
 
 # one glaring thing is that all the reviews are almost perfectly correlated, so I'm just going to
 # take the mean of them and group them all into 'reviews'
-reviews = ['review_scores_value', 
+reviews = ['review_scores_value', 'review_scores_rating',
            'review_scores_accuracy', 'review_scores_cleanliness', 'review_scores_checkin',
            'review_scores_communication', 'review_scores_location']
 numeric_data['reviews'] = numeric_data[reviews].mean(axis=1)
@@ -274,6 +278,30 @@ for train_idx,test_idx in kfold.split(numeric_data[features]):
     coefs.append(regression.coef_)
 # mean r2 of .55 with linear regression and a paired down set of regressors, pretty good starting
 # point but lets see if we can do better in other files.
+
+# let me just standardize the features and see if that helps at all
+from sklearn.preprocessing import MinMaxScaler
+
+scaler = MinMaxScaler()
+X = scaler.fit_transform(numeric_data[features])
+cv_scores = []
+coefs = []
+for train_idx,test_idx in kfold.split(X):
+    regression.fit(X[train_idx],numeric_data['monthly_income'].iloc[train_idx])
+    r2=regression.score(X[test_idx],numeric_data['monthly_income'].iloc[test_idx])
+    cv_scores.append(r2)
+    coefs.append(regression.coef_)
+# now that all the values are on the same scale, lets peak into the weights to see which seem most 
+# important
+coefs = np.mean(coefs, axis = 0)
+for i in range(len(coefs)):
+    print(features[i] + ' weight: {:1.3f}'.format(coefs[i]))
+
+# ok some things here make sense, like the strongest weights are on #beds and price, but some are weird,
+# like bathrooms is strongly negtive, might be some nonlinear interactions here that would be better
+# modeled another way.
+
+from tensorflow import keras
 
 # first I'm going to explore a few of the wordy columns to see if theres any promising information
 # there
