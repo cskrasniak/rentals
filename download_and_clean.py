@@ -136,7 +136,11 @@ rt_mapper = {'Entire home/apt' : 3, 'Private room' : 2, 'Hotel room' : 1}
 data['room_type'] = data['room_type'].map(rt_mapper)
 # the nan room types are shared, so assign these to 0
 data['room_type'][data['room_type'].isna()] = 0
-
+# I think I want to have this one-hot instead, so going to add that here
+data['room_type_entire'] = data['room_type'].map({3:1, 2:0, 1:0, 0:0})
+data['room_type_private'] = data['room_type'].map({2:1, 3:0, 1:0, 0:0})
+data['room_type_hotel'] = data['room_type'].map({1:1, 3:0, 2:0, 0:0})
+data['room_type_none'] = data['room_type'].map({0:1, 3:0, 2:0, 1:0})
 # Ok things are starting to look better, but because of the way I grabbed the data, there are many
 # duplicates and triplicates of listings in the set. So now I need to make some decisions about how
 # to solve this. For this first step of just making a simple regression model, I think I'll just 
@@ -152,7 +156,7 @@ use_columns = ['host_is_superhost', 'host_listings_count', 'host_has_profile_pic
                'review_scores_cleanliness', 'review_scores_checkin', 'review_scores_communication',
                'review_scores_location', 'review_scores_value', 'instant_bookable',
                'calculated_host_listings_count','reviews_per_month', 'has_availability', 
-               'room_type'] # dont want , 'id' if not using groupby
+               'room_type_none', 'room_type_hotel', 'room_type_private', 'room_type_entire'] # dont want , 'id' if not using groupby
 
 numeric_data = data[use_columns]
 # try skipping the groupby to treat each data point independently
@@ -265,7 +269,8 @@ features = ['host_is_superhost', 'host_has_profile_pic', 'host_identity_verified
             'maximum_nights',  'number_of_reviews', 'price',
             'number_of_reviews_ltm', 'instant_bookable',
             'calculated_host_listings_count', 'reviews_per_month',
-            'room_type', 'reviews']
+            'room_type_none', 'room_type_hotel', 'room_type_private', 'room_type_entire',
+            'reviews']
 
 regression = LinearRegression()
 kfold = KFold(5, shuffle=True)
