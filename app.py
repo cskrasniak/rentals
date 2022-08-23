@@ -1,3 +1,4 @@
+from fileinput import filename
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -653,7 +654,7 @@ def main():
                                             min_value=-180.0,
                                             max_value=180.0,
                                             value=float(round(meds['latitude'])),
-                                            format='%f',
+                                            format='%.5f',
                                             key='latitude',
                                             help="decimal latitude",
                                             step=1.
@@ -662,7 +663,7 @@ def main():
                                             min_value=-180.0,
                                             max_value=180.0,
                                             value=float(round(meds['longitude'])),
-                                            format='%f',
+                                            format='%.5f',
                                             key='longitude',
                                             help="decimal longitude",
                                             step=1.
@@ -698,7 +699,6 @@ def main():
                     st.session_state['data'][col1] = meds[col1]
             
             if button:
-                prediction = int((45+np.random.randn(1)*45) * price / 3)
                 st.session_state['num'] += 1
                 st.session_state['data'] = st.session_state['data'].append({'location': city,
                          'property_type': property_type,
@@ -720,7 +720,7 @@ def main():
                          'review_scores_location': review_scores_location,
                          'review_scores_communication': review_scores_communication,
                          'host_is_superhost': host_is_superhost,
-                         'prediction': prediction,
+                         'prediction': np.nan,
                          'listing_num': st.session_state['num'],
                          'latitude': latitude,
                          'longitude': longitude,
@@ -747,9 +747,14 @@ def main():
                              )[0]
 
                 
-
-                st.write(f'Your predicted monthly income is: $*{prediction*price/3}*!')
-
+                st.session_state['data']['prediction'].iloc[-1] = prediction*price/3
+                st.write(f'Your predicted monthly income is: $*{round(prediction*price/3)}*!')
+                st.download_button(label='Download best listing',
+                                   data=(st.session_state['data']
+                                         [st.session_state['data']['prediction']
+                                               ==st.session_state['data']['prediction'].max()]
+                                         .to_csv().encode('utf-8')),
+                                   file_name='optimal_listing.csv')
             
             # st.markdown(f"With this listing, we predict you'll earn *{prediction*price/3}*!")
             if button:
