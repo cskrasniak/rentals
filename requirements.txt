@@ -178,6 +178,3 @@ wrapt==1.14.0
 wsproto==1.1.0
 xgboost==1.6.0
 zipp==3.8.0
-
-[notice] A new release of pip available: 22.1.2 -> 22.2.2
-[notice] To update, run: pip install --upgrade pip
