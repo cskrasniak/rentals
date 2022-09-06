@@ -31,8 +31,7 @@ dill
 ediblepickle 
 entrypoints 
 et-xmlfile 
-fastjsonschema 
-flake8 
+fastjsonschema  
 flatbuffers 
 fonttools 
 gast 
