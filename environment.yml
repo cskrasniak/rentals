@@ -1,4 +1,4 @@
-name: ds_default
+name: base
 channels:
   - conda-forge
   - defaults
