@@ -28,7 +28,7 @@ dependencies:
   - parso=0.8.3
   - pexpect=4.8.0
   - pickleshare=0.7.5
-  - pip=22.2.2
+  - pip=22.0.4
   - prompt-toolkit=3.0.29
   - psutil=5.9.0
   - ptyprocess=0.7.0
