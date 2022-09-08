@@ -130,7 +130,7 @@ dependencies:
     - preshed==3.0.6
     - prometheus-client==0.14.1
     - protobuf==3.20.1
-    - pyarrow==8.0.0
+    - pyarrow>=8.0.0
     - pyasn1==0.4.8
     - pyasn1-modules==0.2.8
     - pycodestyle==2.8.0
@@ -165,7 +165,7 @@ dependencies:
     - spacy-legacy==3.0.9
     - spacy-loggers==1.0.2
     - srsly==2.4.3
-    - streamlit==1.11.0
+    - streamlit>=1.11.0
     - tenacity==8.0.1
     - tensorboard==2.8.0
     - tensorboard-data-server==0.6.1
