@@ -1,4 +1,4 @@
-from fileinput import filename
+# from fileinput import filename
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -21,6 +21,7 @@ from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
 import nltk
 nltk.download('stopwords')
+nltk.download('punkt')
 
 # from sklearn.pipeline import FeatureUnion
 # from sklearn.pipeline import Pipeline
