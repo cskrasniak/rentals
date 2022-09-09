@@ -22,6 +22,7 @@ from nltk.tokenize import word_tokenize
 import nltk
 nltk.download('stopwords')
 nltk.download('punkt')
+nltk.download('wordnet')
 
 # from sklearn.pipeline import FeatureUnion
 # from sklearn.pipeline import Pipeline
